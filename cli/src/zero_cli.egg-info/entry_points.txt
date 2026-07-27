@@ -1,0 +1,2 @@
+[console_scripts]
+zero = zero_cli.main:app

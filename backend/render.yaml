@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: zero-orchestrator-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://postgres.xvvpmofnuvptnbhkvazg:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+      - key: SUPABASE_URL
+        value: https://xvvpmofnuvptnbhkvazg.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        value: sb_publishable_HK5uxbM2U7q13aK9NGQYHA_36qnmqAM
+      - key: SECRET_KEY
+        value: zero-terminal-production-secret-key-2024
+      - key: ALLOWED_ORIGINS
+        value: https://zero-orchestrator.vercel.app
+      - key: PYTHON_VERSION
+        value: 3.13

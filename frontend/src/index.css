@@ -1,0 +1,129 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply min-h-screen bg-[#0a0a0f] text-slate-100;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border bg-[#12121a]/90 shadow-xl backdrop-blur-xl;
+    border-color: rgba(148, 163, 184, 0.08);
+  }
+  .panel-muted {
+    @apply rounded-2xl border border-slate-800/50 bg-[#0f0f16]/80 backdrop-blur-sm;
+    transition: all 0.2s ease;
+  }
+  .panel-muted:hover {
+    border-color: rgba(148, 163, 184, 0.15);
+    background-color: rgba(15, 15, 22, 0.9);
+  }
+  .input-field {
+    @apply w-full rounded-xl border border-slate-800/60 bg-[#0a0a0f]/80 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 outline-none transition-all duration-200 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/10 disabled:opacity-45;
+  }
+  .input-field:focus {
+    background-color: rgba(10, 10, 15, 0.95);
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition-all duration-200 hover:from-orange-400 hover:to-amber-400 hover:shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:from-orange-500 disabled:hover:to-amber-500 disabled:hover:scale-100;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-800/60 px-5 py-3 text-sm font-medium text-slate-400 transition-all duration-200 hover:border-orange-500/30 hover:bg-orange-500/5 hover:text-slate-200 disabled:opacity-45;
+  }
+  .status-pill {
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium tracking-wide;
+  }
+  .stream-item {
+    @apply flex gap-3 rounded-xl border border-transparent px-4 py-3 text-sm transition-all duration-200;
+  }
+  .stream-item-active {
+    border-color: rgba(249, 115, 22, 0.2);
+    background-color: rgba(249, 115, 22, 0.05);
+  }
+  .stream-item-done {
+    border-color: rgba(34, 197, 94, 0.15);
+    background-color: rgba(34, 197, 94, 0.04);
+  }
+  .stream-item-error {
+    border-color: rgba(239, 68, 68, 0.2);
+    background-color: rgba(239, 68, 68, 0.05);
+  }
+  .modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+  }
+  .modal-panel {
+    @apply panel w-full max-w-lg p-7 shadow-2xl;
+    animation: modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .modal-close {
+    @apply flex h-9 w-9 items-center justify-center rounded-xl text-xl leading-none text-slate-500 transition-all duration-200 hover:bg-slate-800 hover:text-white hover:scale-110;
+  }
+  .font-display {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Additional hover effects */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 15, 22, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.7);
+}
