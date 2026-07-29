@@ -32,7 +32,7 @@ def on_startup():
 # Production CORS configuration
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173"
+    "https://zero-orchestrator.vercel.app,http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
 ).split(",")
 
 app.add_middleware(
