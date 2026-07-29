@@ -666,6 +666,58 @@ function formatTime(date = new Date()) {
 
 
 
+function Modal({ open, onClose, children }) {
+
+  useEffect(() => {
+
+    if (!open) return undefined;
+
+    const onKey = (e) => {
+
+      if (e.key === "Escape") onClose();
+
+    };
+
+    window.addEventListener("keydown", onKey);
+
+    return () => window.removeEventListener("keydown", onKey);
+
+  }, [open, onClose]);
+
+
+
+  if (!open) return null;
+
+
+
+  return (
+
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+
+      <div
+
+        className="modal-panel"
+
+        role="dialog"
+
+        aria-modal="true"
+
+        onClick={(e) => e.stopPropagation()}
+
+      >
+
+        {children}
+
+      </div>
+
+    </div>
+
+  );
+
+}
+
+
+
 const CUSTOM_INTENT_TYPES = new Set([
 
   "vercel_deploy",
