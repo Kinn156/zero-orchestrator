@@ -2,6 +2,11 @@ import { serializeIntegrations } from "./orchestrate.js";
 
 export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
+// Validate API_BASE is set in production
+if (import.meta.env.PROD && (!API_BASE || API_BASE === "http://localhost:8080")) {
+  console.error("VITE_API_URL environment variable is not set in production. Please configure it in your deployment platform.");
+}
+
 async function parseJsonResponse(response) {
   const text = await response.text();
   try {
