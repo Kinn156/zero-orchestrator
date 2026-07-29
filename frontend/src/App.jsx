@@ -757,25 +757,6 @@ export default function App() {
 
 
 
-  // Show error if API_BASE is not configured in production
-  if (import.meta.env.PROD && (!API_BASE || API_BASE === "http://localhost:8080")) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="panel p-8 max-w-md text-center">
-          <h1 className="font-display text-xl font-semibold text-white mb-4">Configuration Error</h1>
-          <p className="text-sm text-slate-400 mb-4">
-            The VITE_API_URL environment variable is not configured. Please set it to your backend API URL.
-          </p>
-          <p className="font-mono text-xs text-orange-400">
-            Expected: https://zero-orchestrator-api.onrender.com
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-
-
   useEffect(() => {
 
     if (streamRef.current) {
