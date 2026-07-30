@@ -1,0 +1,84 @@
+{
+  "name": "zero-orchestrator",
+  "version": "1.0.0",
+  "description": "Zero Orchestrator MCP Server - Command your development stack in plain language",
+  "author": "Zero Orchestrator Team",
+  "license": "MIT",
+  "mcp": {
+    "server": {
+      "command": "uvicorn",
+      "args": ["main:app", "--host", "0.0.0.0", "--port", "8080"],
+      "env": {
+        "API_URL": {
+          "description": "Zero Orchestrator API URL",
+          "default": "https://zero-orchestrator-api.onrender.com",
+          "required": true
+        },
+        "API_KEY": {
+          "description": "Your Zero Orchestrator API Key (format: zo_live_...)",
+          "required": true,
+          "secret": true
+        }
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "verify_supabase_connection",
+      "description": "Verify Supabase credentials and connection",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "supabase_url": {
+            "type": "string",
+            "description": "Supabase project URL"
+          },
+          "supabase_anon_key": {
+            "type": "string",
+            "description": "Supabase anon or service role key"
+          }
+        },
+        "required": ["supabase_url", "supabase_anon_key"]
+      }
+    },
+    {
+      "name": "execute_vault_integration",
+      "description": "Execute an action using a registered vault integration",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "integration_id": {
+            "type": "string",
+            "description": "ID of the integration to use"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Natural language command for the integration"
+          }
+        },
+        "required": ["integration_id", "prompt"]
+      }
+    },
+    {
+      "name": "execute_local_command",
+      "description": "Execute a local terminal command via the zero-cli subprocess bridge",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Command to execute on the local machine"
+          },
+          "auto_approve": {
+            "type": "boolean",
+            "description": "Skip user confirmation (use with caution)",
+            "default": false
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  ],
+  "resources": [],
+  "prompts": []
+}

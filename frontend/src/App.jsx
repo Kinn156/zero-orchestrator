@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import Toast from "./components/Toast.jsx";
 
@@ -688,6 +689,8 @@ export default function App() {
   const [mcpToken, setMcpToken] = useState("");
   const [toast, setToast] = useState(null);
 
+  const navigate = useNavigate();
+
   const streamRef = useRef(null);
 
   const entryCounter = useRef(0);
@@ -1300,10 +1303,16 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setShowDevSettings(!showDevSettings)}
+              onClick={() => navigate('/developer')}
               className="btn-primary text-xs"
             >
-              Developer Settings
+              Developer & Extensions
+            </button>
+            <button
+              onClick={() => setShowDevSettings(!showDevSettings)}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              Settings
             </button>
           </div>
 

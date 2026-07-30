@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import App from "./App.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
+import Developer from "./pages/Developer.jsx";
 import "./index.css";
 
 class ErrorBoundary extends Component {
@@ -67,6 +68,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route
+            path="/developer"
+            element={
+              <ProtectedRoute>
+                <Developer />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/"
             element={

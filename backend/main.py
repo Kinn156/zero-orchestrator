@@ -19,7 +19,7 @@ from supabase import create_client, Client
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from sqlmodel import Session, select
-from database import engine, init_db, User, VaultIntegration, MCPToken
+from database import engine, init_db, User, VaultIntegration, MCPToken, APIKey, UserIntegration
 
 app = FastAPI(title="Deploy Dashboard API", version="1.1.0")
 
@@ -189,16 +189,50 @@ def _verify_mcp_token(token: str, db: Session) -> Optional[str]:
     return None
 
 
-def _get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[str]:
-    """Get the current user ID from JWT token."""
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
+def _generate_api_key() -> str:
+    """Generate a new API key with format zo_live_<random_string>."""
+    random_string = uuid.uuid4().hex[:32]
+    return f"zo_live_{random_string}"
+
+
+def _hash_api_key(api_key: str) -> str:
+    """Hash an API key for storage."""
+    return pwd_context.hash(api_key)
+
+
+def _verify_api_key(api_key: str, db: Session) -> Optional[str]:
+    """Verify an API key and return the associated user_id."""
+    api_keys = db.exec(select(APIKey).where(APIKey.is_active == True)).all()
+    for key in api_keys:
+        if pwd_context.verify(api_key, key.key_hash):
+            # Update last used timestamp
+            key.last_used_at = datetime.now(timezone.utc)
+            db.add(key)
+            db.commit()
+            return key.user_id
+    return None
+
+
+def _get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db), x_api_key: Optional[str] = Header(None)) -> Optional[str]:
+    """Get the current user ID from JWT token or API key."""
+    # Try API key first
+    if x_api_key and x_api_key.startswith("zo_live_"):
+        user_id = _verify_api_key(x_api_key, db)
+        if user_id:
+            return user_id
+    
+    # Fall back to JWT
+    if credentials:
+        try:
+            payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id: str = payload.get("sub")
+            if user_id is None:
+                return None
+            return user_id
+        except JWTError:
             return None
-        return user_id
-    except JWTError:
-        return None
+    
+    return None
 
 
 def _get_user_from_mcp_token(authorization: Optional[str] = Header(None)) -> Optional[str]:
@@ -259,6 +293,39 @@ class MCPTokenResponse(BaseModel):
     token: str
     user_id: str
     created_at: datetime
+
+
+class APIKeyCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Name for the API key")
+
+
+class APIKeyResponse(BaseModel):
+    id: int
+    key_prefix: str
+    name: str
+    created_at: datetime
+    last_used_at: Optional[datetime]
+    is_active: bool
+
+
+class APIKeyCreateResponse(BaseModel):
+    key: str  # Only returned once on creation
+    key_prefix: str
+    name: str
+    created_at: datetime
+
+
+class UserIntegrationCreate(BaseModel):
+    service_name: str = Field(..., min_length=1, max_length=100)
+    api_key: str = Field(..., min_length=1, max_length=500)
+    config: Optional[str] = Field(None, max_length=1000)
+
+
+class UserIntegrationResponse(BaseModel):
+    id: int
+    service_name: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class ParseCommandRequest(BaseModel):
@@ -877,6 +944,157 @@ async def generate_mcp_token(
     )
 
 
+# API Key Management Routes
+@app.post("/api/v1/developer/keys", response_model=APIKeyCreateResponse)
+async def create_api_key(
+    key_data: APIKeyCreate,
+    user_id: str = Depends(_get_current_user),
+    db: Session = Depends(get_db)
+) -> APIKeyCreateResponse:
+    """Generate a new API key for the authenticated user."""
+    api_key = _generate_api_key()
+    key_hash = _hash_api_key(api_key)
+    key_prefix = api_key[:20]  # Store prefix for identification
+    
+    new_key = APIKey(
+        key_hash=key_hash,
+        key_prefix=key_prefix,
+        user_id=user_id,
+        name=key_data.name,
+        is_active=True
+    )
+    db.add(new_key)
+    db.commit()
+    db.refresh(new_key)
+    
+    return APIKeyCreateResponse(
+        key=api_key,  # Only returned once
+        key_prefix=key_prefix,
+        name=key_data.name,
+        created_at=new_key.created_at
+    )
+
+
+@app.get("/api/v1/developer/keys", response_model=list[APIKeyResponse])
+async def list_api_keys(
+    user_id: str = Depends(_get_current_user),
+    db: Session = Depends(get_db)
+) -> list[APIKeyResponse]:
+    """List all API keys for the authenticated user."""
+    keys = db.exec(
+        select(APIKey).where(APIKey.user_id == user_id).order_by(APIKey.created_at.desc())
+    ).all()
+    
+    return [
+        APIKeyResponse(
+            id=key.id,
+            key_prefix=key.key_prefix,
+            name=key.name,
+            created_at=key.created_at,
+            last_used_at=key.last_used_at,
+            is_active=key.is_active
+        )
+        for key in keys
+    ]
+
+
+@app.delete("/api/v1/developer/keys/{key_id}")
+async def revoke_api_key(
+    key_id: int,
+    user_id: str = Depends(_get_current_user),
+    db: Session = Depends(get_db)
+) -> dict[str, str]:
+    """Revoke an API key by ID."""
+    api_key = db.exec(
+        select(APIKey).where(
+            APIKey.id == key_id,
+            APIKey.user_id == user_id
+        )
+    ).first()
+    
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+    
+    api_key.is_active = False
+    db.add(api_key)
+    db.commit()
+    
+    return {"message": "API key revoked successfully"}
+
+
+# User Integration Management Routes
+@app.post("/api/v1/developer/integrations", response_model=UserIntegrationResponse)
+async def create_user_integration(
+    integration_data: UserIntegrationCreate,
+    user_id: str = Depends(_get_current_user),
+    db: Session = Depends(get_db)
+) -> UserIntegrationResponse:
+    """Add a custom user API integration."""
+    # In production, you would encrypt the API key here
+    encrypted_key = _hash_api_key(integration_data.api_key)  # Simple hashing for now
+    
+    new_integration = UserIntegration(
+        user_id=user_id,
+        service_name=integration_data.service_name,
+        encrypted_api_key=encrypted_key,
+        config=integration_data.config
+    )
+    db.add(new_integration)
+    db.commit()
+    db.refresh(new_integration)
+    
+    return UserIntegrationResponse(
+        id=new_integration.id,
+        service_name=new_integration.service_name,
+        created_at=new_integration.created_at,
+        updated_at=new_integration.updated_at
+    )
+
+
+@app.get("/api/v1/developer/integrations", response_model=list[UserIntegrationResponse])
+async def list_user_integrations(
+    user_id: str = Depends(_get_current_user),
+    db: Session = Depends(get_db)
+) -> list[UserIntegrationResponse]:
+    """List all custom user integrations."""
+    integrations = db.exec(
+        select(UserIntegration).where(UserIntegration.user_id == user_id)
+    ).all()
+    
+    return [
+        UserIntegrationResponse(
+            id=integration.id,
+            service_name=integration.service_name,
+            created_at=integration.created_at,
+            updated_at=integration.updated_at
+        )
+        for integration in integrations
+    ]
+
+
+@app.delete("/api/v1/developer/integrations/{integration_id}")
+async def delete_user_integration(
+    integration_id: int,
+    user_id: str = Depends(_get_current_user),
+    db: Session = Depends(get_db)
+) -> dict[str, str]:
+    """Delete a custom user integration."""
+    integration = db.exec(
+        select(UserIntegration).where(
+            UserIntegration.id == integration_id,
+            UserIntegration.user_id == user_id
+        )
+    ).first()
+    
+    if not integration:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    
+    db.delete(integration)
+    db.commit()
+    
+    return {"message": "Integration deleted successfully"}
+
+
 @app.post("/api/integrations/register")
 async def register_integrations(
     body: IntegrationsRegisterRequest,
@@ -1307,3 +1525,13 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)
+
+
+# Mount MCP server as a sub-application
+from fastapi import FastAPI as SubApp
+mcp_app = FastAPI(title="Zero Orchestrator MCP Server")
+@mcp_app.get("/")
+async def mcp_root():
+    return {"name": "Zero Orchestrator MCP", "version": "1.0.0", "status": "running"}
+
+app.mount("/mcp", mcp_app)
