@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import Toast from "./components/Toast.jsx";
+
 import {
 
   checkHealth,
@@ -72,87 +74,6 @@ const EMPTY_FORM = {
 
 
 
-function HeaderStatus({ backendOnline, mode }) {
-
-  const backendLabel =
-
-    backendOnline === null ? "Checking…" : backendOnline ? "Online" : "Offline";
-
-  const backendOk = backendOnline === true;
-
-
-
-  return (
-
-    <div className="flex flex-wrap items-center gap-2">
-
-      <span
-
-        className={`status-pill ${
-
-          backendOk
-
-            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-
-            : backendOnline === null
-
-              ? "border-slate-600 bg-surface-800 text-slate-400"
-
-              : "border-amber-500/30 bg-amber-500/10 text-amber-200"
-
-        }`}
-
-      >
-
-        <span
-
-          className={`h-2 w-2 rounded-full ${
-
-            backendOk
-
-              ? "bg-emerald-400"
-
-              : backendOnline === null
-
-                ? "animate-pulse-soft bg-slate-500"
-
-                : "bg-amber-400"
-
-          }`}
-
-        />
-
-        Backend Status: {backendLabel}
-
-      </span>
-
-      <span
-
-        className={`status-pill ${
-
-          mode === "live"
-
-            ? "border-accent/30 bg-accent/10 text-cyan-100"
-
-            : mode === "mixed"
-
-              ? "border-violet-500/30 bg-violet-500/10 text-violet-200"
-
-              : "border-slate-600 bg-surface-800 text-slate-300"
-
-        }`}
-
-      >
-
-        Mode: {MODE_LABELS[mode]}
-
-      </span>
-
-    </div>
-
-  );
-
-}
 
 
 
@@ -758,8 +679,6 @@ export default function App() {
 
   const [isRunning, setIsRunning] = useState(false);
 
-  const [backendOnline, setBackendOnline] = useState(null);
-
   // Load user from localStorage on mount
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('user');
@@ -767,6 +686,7 @@ export default function App() {
   });
   const [showDevSettings, setShowDevSettings] = useState(false);
   const [mcpToken, setMcpToken] = useState("");
+  const [toast, setToast] = useState(null);
 
   const streamRef = useRef(null);
 
@@ -784,30 +704,6 @@ export default function App() {
 
 
 
-  const refreshBackendStatus = useCallback(() => {
-
-    checkHealth()
-
-      .then(setBackendOnline)
-
-      .catch(() => setBackendOnline(false));
-
-  }, []);
-
-
-
-  useEffect(() => {
-
-    refreshBackendStatus();
-
-    const interval = setInterval(refreshBackendStatus, 15000);
-
-    return () => clearInterval(interval);
-
-  }, [refreshBackendStatus]);
-
-
-
   useEffect(() => {
 
     if (streamRef.current) {
@@ -822,7 +718,7 @@ export default function App() {
 
   useEffect(() => {
 
-    if (!customIntegrations.length || !backendOnline) return;
+    if (!customIntegrations.length) return;
 
     registerIntegrations(customIntegrations).catch(() => {
 
@@ -830,7 +726,7 @@ export default function App() {
 
     });
 
-  }, [customIntegrations, backendOnline]);
+  }, [customIntegrations]);
 
 
 
@@ -841,7 +737,7 @@ export default function App() {
       const result = await generateMCPToken(user.id);
       setMcpToken(result.token);
     } catch (error) {
-      console.error("Failed to generate MCP token:", error);
+      setToast({ message: "Failed to generate MCP token. Please try again.", type: "error" });
     }
   };
 
@@ -1402,8 +1298,6 @@ export default function App() {
 
           </div>
 
-          <HeaderStatus backendOnline={backendOnline} mode={mode} />
-
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowDevSettings(!showDevSettings)}
@@ -1723,6 +1617,28 @@ export default function App() {
             
             <div className="border-t border-slate-800 pt-4">
               <h3 className="font-display text-lg font-semibold text-white mb-3">
+                System Health
+              </h3>
+              <button
+                onClick={async () => {
+                  try {
+                    const isHealthy = await checkHealth();
+                    setToast({ 
+                      message: isHealthy ? "Backend is online and healthy" : "Backend is offline", 
+                      type: isHealthy ? "success" : "error" 
+                    });
+                  } catch {
+                    setToast({ message: "Unable to reach server. Please try again.", type: "error" });
+                  }
+                }}
+                className="btn-primary w-full"
+              >
+                Check Backend Health
+              </button>
+            </div>
+            
+            <div className="border-t border-slate-800 pt-4">
+              <h3 className="font-display text-lg font-semibold text-white mb-3">
                 MCP Token
               </h3>
               <p className="text-sm text-slate-400 mb-3">
@@ -1755,6 +1671,14 @@ export default function App() {
           </div>
         </div>
       </Modal>
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
 
     </div>
 
