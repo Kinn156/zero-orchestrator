@@ -760,14 +760,13 @@ export default function App() {
 
   const [backendOnline, setBackendOnline] = useState(null);
 
-  // Authentication state
-  const [user, setUser] = useState(null);
-  const [accessToken, setAccessToken] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  // Load user from localStorage on mount
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [showDevSettings, setShowDevSettings] = useState(false);
   const [mcpToken, setMcpToken] = useState("");
-  const [authMode, setAuthMode] = useState("login"); // login or register
 
   const streamRef = useRef(null);
 
@@ -835,47 +834,24 @@ export default function App() {
 
 
 
-  // Authentication handlers
-  const handleAuth = async (e) => {
-    e.preventDefault();
-    setAuthError("");
-    
-    const email = e.target.email.value;
-    const password = e.target.password.value;
-    
-    try {
-      if (authMode === "register") {
-        const result = await registerUser(email, password);
-        setUser({ id: result.user_id, email });
-        setAccessToken(result.access_token);
-        setShowAuthModal(false);
-      } else {
-        const result = await loginUser(email, password);
-        setUser({ id: result.user_id, email });
-        setAccessToken(result.access_token);
-        setShowAuthModal(false);
-      }
-    } catch (error) {
-      setAuthError(error.message);
-    }
-  };
-
   const handleGenerateMCPToken = async () => {
-    if (!user || !accessToken) return;
+    if (!user) return;
     
     try {
-      const result = await generateMCPToken(user.id, accessToken);
+      const result = await generateMCPToken(user.id);
       setMcpToken(result.token);
     } catch (error) {
-      setAuthError(error.message);
+      console.error("Failed to generate MCP token:", error);
     }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
-    setAccessToken("");
     setMcpToken("");
     setShowDevSettings(false);
+    window.location.href = '/login';
   };
 
 
@@ -1429,21 +1405,12 @@ export default function App() {
           <HeaderStatus backendOnline={backendOnline} mode={mode} />
 
           <div className="flex items-center gap-3">
-            {user ? (
-              <button
-                onClick={() => setShowDevSettings(!showDevSettings)}
-                className="btn-primary text-xs"
-              >
-                Developer Settings
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="btn-primary text-xs"
-              >
-                Login
-              </button>
-            )}
+            <button
+              onClick={() => setShowDevSettings(!showDevSettings)}
+              className="btn-primary text-xs"
+            >
+              Developer Settings
+            </button>
           </div>
 
         </div>
@@ -1726,67 +1693,6 @@ export default function App() {
 
       />
 
-      {/* Authentication Modal */}
-      <Modal
-        open={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-      >
-        <div className="panel p-6">
-          <h2 className="font-display text-xl font-semibold text-white mb-4">
-            {authMode === "register" ? "Create Account" : "Login"}
-          </h2>
-          
-          <form onSubmit={handleAuth} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                required
-                className="input-field"
-                placeholder="your@email.com"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                required
-                minLength={8}
-                className="input-field"
-                placeholder="••••••••"
-              />
-            </div>
-            
-            {authError && (
-              <div className="text-sm text-red-400">{authError}</div>
-            )}
-            
-            <div className="flex gap-3">
-              <button type="submit" className="btn-primary flex-1">
-                {authMode === "register" ? "Create Account" : "Login"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode(authMode === "register" ? "login" : "register");
-                  setAuthError("");
-                }}
-                className="px-4 py-3 rounded-xl border border-slate-700 bg-slate-800/50 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
-              >
-                {authMode === "register" ? "Switch to Login" : "Switch to Register"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
-
       {/* Developer Settings Modal */}
       <Modal
         open={showDevSettings}
@@ -1846,10 +1752,6 @@ export default function App() {
                 </button>
               )}
             </div>
-            
-            {authError && (
-              <div className="text-sm text-red-400">{authError}</div>
-            )}
           </div>
         </div>
       </Modal>

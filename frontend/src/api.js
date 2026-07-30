@@ -3,6 +3,11 @@ import { serializeIntegrations } from "./orchestrate.js";
 export const API_BASE = import.meta.env.VITE_API_URL || 
   (import.meta.env.PROD ? "https://zero-orchestrator-api.onrender.com" : "http://localhost:8080");
 
+function getAuthHeaders() {
+  const token = localStorage.getItem('token');
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
 async function parseJsonResponse(response) {
   const text = await response.text();
   try {
@@ -19,7 +24,7 @@ function vaultPayload(integrations = []) {
 export async function registerIntegrations(integrations) {
   const response = await fetch(`${API_BASE}/api/integrations/register`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({ integrations: serializeIntegrations(integrations) }),
   });
   const data = await parseJsonResponse(response);
@@ -32,7 +37,7 @@ export async function registerIntegrations(integrations) {
 export async function parseCommandRemote(prompt, integrations = []) {
   const response = await fetch(`${API_BASE}/api/parse-command`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({ prompt, integrations: serializeIntegrations(integrations) }),
   });
   const data = await parseJsonResponse(response);
@@ -45,7 +50,7 @@ export async function parseCommandRemote(prompt, integrations = []) {
 export async function executeIntegration({ integration, prompt, integrations = [] }) {
   const response = await fetch(`${API_BASE}/api/execute-integration`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({
       integration: serializeIntegrations([integration])[0],
       prompt,
@@ -69,7 +74,7 @@ export async function orchestrate({
 }) {
   const response = await fetch(`${API_BASE}/api/orchestrate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({
       prompt,
       supabase_url: supabaseUrl || null,
@@ -89,7 +94,7 @@ export async function orchestrate({
 export async function verifySupabase(supabaseUrl, supabaseAnonKey, integrations = []) {
   const response = await fetch(`${API_BASE}/api/verify-supabase`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({
       supabase_url: supabaseUrl,
       supabase_anon_key: supabaseAnonKey,
@@ -106,7 +111,7 @@ export async function verifySupabase(supabaseUrl, supabaseAnonKey, integrations 
 export async function deployNetlify({ netlifyToken, siteId, prompt, integrations = [] }) {
   const response = await fetch(`${API_BASE}/api/deploy-netlify`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({
       netlify_token: netlifyToken,
       site_id: siteId || null,
@@ -129,7 +134,7 @@ export async function createDatabaseTable({
 }) {
   const response = await fetch(`${API_BASE}/api/create-table`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({
       supabase_url: supabaseUrl,
       supabase_anon_key: supabaseAnonKey,
@@ -176,12 +181,12 @@ export async function loginUser(email, password) {
   return data;
 }
 
-export async function generateMCPToken(userId, accessToken) {
+export async function generateMCPToken(userId) {
   const response = await fetch(`${API_BASE}/api/mcp/token`, {
     method: "POST",
     headers: { 
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${accessToken}`
+      ...getAuthHeaders()
     },
     body: JSON.stringify({ user_id: userId }),
   });
