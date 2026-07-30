@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { registerUser } from "../api.js";
+import { useState, useEffect } from "react";
+import { registerUser, API_BASE } from "../api.js";
 import { useNavigate } from "react-router-dom";
 
 export default function Signup() {
@@ -9,6 +9,13 @@ export default function Signup() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Warm-up ping on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/health`, { mode: 'cors' }).catch(() => {
+      // Silently fail - this is just a warm-up
+    });
+  }, []);
 
   const validateEmail = (email) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -116,7 +123,7 @@ export default function Signup() {
             disabled={loading}
             className="btn-primary w-full"
           >
-            {loading ? "Creating account..." : "Create Account"}
+            {loading ? "Connecting to server..." : "Create Account"}
           </button>
         </form>
 

@@ -8,6 +8,26 @@ function getAuthHeaders() {
   return token ? { "Authorization": `Bearer ${token}` } : {};
 }
 
+async function fetchWithTimeout(url, options = {}, timeout = 45000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout. The server may be starting up. Please try again.');
+    }
+    throw error;
+  }
+}
+
 async function parseJsonResponse(response) {
   const text = await response.text();
   try {
@@ -156,7 +176,7 @@ export async function checkHealth() {
 
 // Authentication API functions
 export async function registerUser(email, password) {
-  const response = await fetch(`${API_BASE}/api/auth/register`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -169,7 +189,7 @@ export async function registerUser(email, password) {
 }
 
 export async function loginUser(email, password) {
-  const response = await fetch(`${API_BASE}/api/auth/login`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),

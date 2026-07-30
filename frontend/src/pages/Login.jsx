@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { loginUser } from "../api.js";
+import { useState, useEffect } from "react";
+import { loginUser, API_BASE } from "../api.js";
 import { useNavigate } from "react-router-dom";
 
 export default function Login() {
@@ -8,6 +8,13 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Warm-up ping on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/health`, { mode: 'cors' }).catch(() => {
+      // Silently fail - this is just a warm-up
+    });
+  }, []);
 
   const validateEmail = (email) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -96,7 +103,7 @@ export default function Login() {
             disabled={loading}
             className="btn-primary w-full"
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Connecting to server..." : "Sign In"}
           </button>
         </form>
 
