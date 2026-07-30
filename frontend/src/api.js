@@ -24,6 +24,9 @@ async function fetchWithTimeout(url, options = {}, timeout = 45000) {
     if (error.name === 'AbortError') {
       throw new Error('Request timeout. The server may be starting up. Please try again.');
     }
+    if (error.message === 'Failed to fetch' || error.message === 'failed to fetch') {
+      throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+    }
     throw error;
   }
 }
