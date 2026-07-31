@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "name": "zero-orchestrator",
+  "version": "1.0.0",
+  "description": "Zero Orchestrator MCP Server - Command your development stack in plain language",
+  "author": "Zero Orchestrator Team",
+  "license": "MIT",
+  "runtime": {
+    "type": "remote",
+    "endpoint": "https://zero-orchestrator-api.onrender.com/mcp"
+  },
+  "environment": {
+    "API_URL": {
+      "description": "Zero Orchestrator API URL",
+      "default": "https://zero-orchestrator-api.onrender.com",
+      "required": true
+    },
+    "API_KEY": {
+      "description": "Your Zero Orchestrator API Key (format: zo_live_...)",
+      "required": true,
+      "secret": true
+    }
+  }
+}

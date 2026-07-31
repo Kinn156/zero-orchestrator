@@ -691,24 +691,24 @@ async def _execute_vault_integration(integration: VaultIntegration, prompt: str)
 async def verify_supabase_connection(
     supabase_url: str, 
     supabase_anon_key: str,
-    authorization: Optional[str] = Header(None)
+    x_api_key: Optional[str] = Header(None)
 ) -> dict:
     """Verify Supabase credentials and connection.
     
     Args:
         supabase_url: Supabase project URL
         supabase_anon_key: Supabase anon or service role key
-        authorization: MCP token for authentication
+        x_api_key: Zero Orchestrator API key for authentication
         
     Returns:
         Verification result with success status and details
     """
-    user_id = _get_user_from_mcp_token(authorization)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid or missing MCP token")
-    
-    # Get user's integrations from database
     with Session(engine) as db:
+        user_id = _verify_api_key(x_api_key, db) if x_api_key else None
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        
+        # Get user's integrations from database
         integrations = db.exec(select(VaultIntegration).where(VaultIntegration.user_id == user_id)).all()
     
     result = await verify_supabase(
@@ -722,17 +722,28 @@ async def verify_supabase_connection(
 
 
 @mcp.tool()
-async def deploy_to_netlify(netlify_token: str, site_id: Optional[str] = None, prompt: Optional[str] = None) -> dict:
+async def deploy_to_netlify(
+    netlify_token: str, 
+    site_id: Optional[str] = None, 
+    prompt: Optional[str] = None,
+    x_api_key: Optional[str] = Header(None)
+) -> dict:
     """Trigger a Netlify deployment.
     
     Args:
         netlify_token: Netlify personal access token
         site_id: Optional existing Netlify site ID
         prompt: Optional deployment message/description
+        x_api_key: Zero Orchestrator API key for authentication
         
     Returns:
         Deployment result with deploy ID and URL
     """
+    with Session(engine) as db:
+        user_id = _verify_api_key(x_api_key, db) if x_api_key else None
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    
     result = await deploy_netlify(
         NetlifyDeployRequest(
             netlify_token=netlify_token,
@@ -745,7 +756,13 @@ async def deploy_to_netlify(netlify_token: str, site_id: Optional[str] = None, p
 
 
 @mcp.tool()
-async def create_supabase_table(supabase_url: str, supabase_anon_key: str, prompt: str, table_name: Optional[str] = None) -> dict:
+async def create_supabase_table(
+    supabase_url: str, 
+    supabase_anon_key: str, 
+    prompt: str, 
+    table_name: Optional[str] = None,
+    x_api_key: Optional[str] = Header(None)
+) -> dict:
     """Create a database table in Supabase based on natural language description.
     
     Args:
@@ -753,10 +770,16 @@ async def create_supabase_table(supabase_url: str, supabase_anon_key: str, promp
         supabase_anon_key: Supabase anon or service role key
         prompt: Natural language description of the table
         table_name: Optional specific table name
+        x_api_key: Zero Orchestrator API key for authentication
         
     Returns:
         Table creation result with SQL preview
     """
+    with Session(engine) as db:
+        user_id = _verify_api_key(x_api_key, db) if x_api_key else None
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    
     result = await create_table(
         CreateTableRequest(
             supabase_url=supabase_url,
@@ -770,7 +793,13 @@ async def create_supabase_table(supabase_url: str, supabase_anon_key: str, promp
 
 
 @mcp.tool()
-async def register_integration(integration_type: str, name: str, api_key: str, endpoint_url: Optional[str] = None) -> dict:
+async def register_integration(
+    integration_type: str, 
+    name: str, 
+    api_key: str, 
+    endpoint_url: Optional[str] = None,
+    x_api_key: Optional[str] = Header(None)
+) -> dict:
     """Register a new integration in the vault.
     
     Args:
@@ -778,18 +807,25 @@ async def register_integration(integration_type: str, name: str, api_key: str, e
         name: Service/key name
         api_key: API token or key
         endpoint_url: Optional endpoint URL for custom_webhook type
+        x_api_key: Zero Orchestrator API key for authentication
         
     Returns:
         Registration result with integration ID and status
     """
+    with Session(engine) as db:
+        user_id = _verify_api_key(x_api_key, db) if x_api_key else None
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    
     integration = VaultIntegration(
         id=str(uuid.uuid4()),
+        user_id=user_id,
         type=integration_type,
         name=name,
         api_key=api_key,
         endpoint_url=endpoint_url,
     )
-    _sync_vault([integration])
+    _sync_vault([integration], user_id)
     return {
         "registered": 1,
         "active": 1 if _integration_active(integration) else 0,
@@ -803,23 +839,23 @@ async def register_integration(integration_type: str, name: str, api_key: str, e
 async def execute_vault_integration(
     integration_id: str, 
     prompt: str,
-    authorization: Optional[str] = Header(None)
+    x_api_key: Optional[str] = Header(None)
 ) -> dict:
     """Execute an action using a registered vault integration.
     
     Args:
         integration_id: ID of the integration to use
         prompt: Natural language command for the integration
-        authorization: MCP token for authentication
+        x_api_key: Zero Orchestrator API key for authentication
         
     Returns:
         Execution result with action details
     """
-    user_id = _get_user_from_mcp_token(authorization)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid or missing MCP token")
-    
     with Session(engine) as db:
+        user_id = _verify_api_key(x_api_key, db) if x_api_key else None
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        
         integration = db.exec(
             select(VaultIntegration).where(
                 VaultIntegration.id == integration_id,
@@ -835,7 +871,11 @@ async def execute_vault_integration(
 
 
 @mcp.tool()
-async def execute_local_command(command: str, auto_approve: bool = False) -> dict:
+async def execute_local_command(
+    command: str, 
+    auto_approve: bool = False,
+    x_api_key: Optional[str] = Header(None)
+) -> dict:
     """Execute a local terminal command via the zero-cli subprocess bridge.
     
     This tool validates and logs command requests for local execution.
@@ -844,11 +884,18 @@ async def execute_local_command(command: str, auto_approve: bool = False) -> dic
     Args:
         command: Command to execute on the local machine
         auto_approve: Skip user confirmation (use with caution)
+        x_api_key: Zero Orchestrator API key for authentication
         
     Returns:
         Command validation result with execution instructions
     """
+    with Session(engine) as db:
+        user_id = _verify_api_key(x_api_key, db) if x_api_key else None
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    
     # Log the command request for audit purposes
+    print(f"[MCP SUBPROCESS] User: {user_id}")
     print(f"[MCP SUBPROCESS] Command: {command}")
     print(f"[MCP SUBPROCESS] Auto-approve: {auto_approve}")
     

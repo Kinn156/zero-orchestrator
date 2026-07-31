@@ -1,0 +1,17 @@
+{
+  "name": "zero-orchestrator-extension",
+  "version": "1.0.0",
+  "description": "Zero Orchestrator MCP Extension",
+  "scripts": {
+    "build": "npx @anthropic-ai/mcpb pack",
+    "pack": "npx @anthropic-ai/mcpb pack"
+  },
+  "keywords": [
+    "mcp",
+    "anthropic",
+    "claude",
+    "zero-orchestrator"
+  ],
+  "author": "Zero Orchestrator Team",
+  "license": "MIT"
+}
