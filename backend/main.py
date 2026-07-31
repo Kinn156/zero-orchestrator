@@ -19,6 +19,7 @@ from supabase import create_client, Client
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from sqlmodel import Session, select
+from cryptography.fernet import Fernet
 from database import engine, init_db, User, VaultIntegration, MCPToken, APIKey, UserIntegration
 
 app = FastAPI(title="Deploy Dashboard API", version="1.1.0")
@@ -50,6 +51,10 @@ mcp = FastMCP("Zero-Terminal Orchestrator")
 SECRET_KEY = os.getenv("SECRET_KEY", "zero-terminal-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+
+# Encryption configuration
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
+fernet = Fernet(ENCRYPTION_KEY.encode())
 
 # Supabase configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
@@ -111,10 +116,13 @@ def _use_mock_key(api_key: Optional[str]) -> bool:
     return os.getenv("FORCE_MOCK", "").lower() in ("1", "true", "yes")
 
 
-def _sync_vault(integrations: list["VaultIntegration"], user_id: str) -> None:
+def _sync_vault(integrations: list[VaultIntegration], user_id: Optional[str] = None):
     """Sync integrations to user's vault in database."""
     with Session(engine) as db:
         for item in integrations:
+            # Encrypt the API key before storage
+            encrypted_key = _encrypt_api_key(item.api_key) if item.api_key else None
+            
             existing = db.exec(
                 select(VaultIntegration).where(
                     VaultIntegration.id == item.id,
@@ -125,7 +133,7 @@ def _sync_vault(integrations: list["VaultIntegration"], user_id: str) -> None:
             if existing:
                 existing.type = item.type
                 existing.name = item.name
-                existing.api_key = item.api_key
+                existing.api_key = encrypted_key
                 existing.endpoint_url = item.endpoint_url
                 existing.updated_at = datetime.now(timezone.utc)
             else:
@@ -134,7 +142,7 @@ def _sync_vault(integrations: list["VaultIntegration"], user_id: str) -> None:
                     user_id=user_id,
                     type=item.type,
                     name=item.name,
-                    api_key=item.api_key,
+                    api_key=encrypted_key,
                     endpoint_url=item.endpoint_url
                 )
                 db.add(integration)
@@ -143,7 +151,16 @@ def _sync_vault(integrations: list["VaultIntegration"], user_id: str) -> None:
 
 
 def _integration_active(item: VaultIntegration) -> bool:
-    return bool(item.api_key and item.api_key.strip())
+    # Check if the API key exists and is not empty (after potential decryption)
+    if not item.api_key or not item.api_key.strip():
+        return False
+    # If it's encrypted, try to decrypt to verify it's valid
+    try:
+        _decrypt_api_key(item.api_key)
+        return True
+    except:
+        # If decryption fails, assume it's not encrypted and check directly
+        return bool(item.api_key and item.api_key.strip())
 
 
 def _match_custom_by_name(prompt: str, integrations: list[VaultIntegration]) -> Optional[VaultIntegration]:
@@ -198,6 +215,16 @@ def _generate_api_key() -> str:
 def _hash_api_key(api_key: str) -> str:
     """Hash an API key for storage."""
     return pwd_context.hash(api_key)
+
+
+def _encrypt_api_key(api_key: str) -> str:
+    """Encrypt an API key using Fernet symmetric encryption."""
+    return fernet.encrypt(api_key.encode()).decode()
+
+
+def _decrypt_api_key(encrypted_key: str) -> str:
+    """Decrypt an API key using Fernet symmetric encryption."""
+    return fernet.decrypt(encrypted_key.encode()).decode()
 
 
 def _verify_api_key(api_key: str, db: Session) -> Optional[str]:
@@ -708,14 +735,25 @@ async def verify_supabase_connection(
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
         
-        # Get user's integrations from database
+        # Get user's integrations from database and decrypt keys
         integrations = db.exec(select(VaultIntegration).where(VaultIntegration.user_id == user_id)).all()
+        decrypted_integrations = []
+        for integration in integrations:
+            decrypted_integration = VaultIntegration(
+                id=integration.id,
+                user_id=integration.user_id,
+                type=integration.type,
+                name=integration.name,
+                api_key=_decrypt_api_key(integration.api_key) if integration.api_key else None,
+                endpoint_url=integration.endpoint_url
+            )
+            decrypted_integrations.append(decrypted_integration)
     
     result = await verify_supabase(
         SupabaseCredentials(
             supabase_url=supabase_url,
             supabase_anon_key=supabase_anon_key,
-            integrations=integrations,
+            integrations=decrypted_integrations,
         )
     )
     return result.model_dump()
@@ -866,7 +904,17 @@ async def execute_vault_integration(
     if not integration:
         raise HTTPException(status_code=404, detail=f"Integration {integration_id} not found in vault")
     
-    result = await _execute_vault_integration(integration, prompt)
+    # Decrypt the API key before execution
+    decrypted_integration = VaultIntegration(
+        id=integration.id,
+        user_id=integration.user_id,
+        type=integration.type,
+        name=integration.name,
+        api_key=_decrypt_api_key(integration.api_key) if integration.api_key else None,
+        endpoint_url=integration.endpoint_url
+    )
+    
+    result = await _execute_vault_integration(decrypted_integration, prompt)
     return result.model_dump()
 
 
@@ -1077,8 +1125,8 @@ async def create_user_integration(
     db: Session = Depends(get_db)
 ) -> UserIntegrationResponse:
     """Add a custom user API integration."""
-    # In production, you would encrypt the API key here
-    encrypted_key = _hash_api_key(integration_data.api_key)  # Simple hashing for now
+    # Encrypt the API key using Fernet
+    encrypted_key = _encrypt_api_key(integration_data.api_key)
     
     new_integration = UserIntegration(
         user_id=user_id,
@@ -1150,6 +1198,9 @@ async def register_integrations(
     """Register integrations for the authenticated user."""
     with Session(engine) as db:
         for item in body.integrations:
+            # Encrypt the API key before storage
+            encrypted_key = _encrypt_api_key(item.api_key) if item.api_key else None
+            
             # Check if integration exists
             existing = db.exec(
                 select(VaultIntegration).where(
@@ -1162,7 +1213,7 @@ async def register_integrations(
                 # Update existing
                 existing.type = item.type
                 existing.name = item.name
-                existing.api_key = item.api_key
+                existing.api_key = encrypted_key
                 existing.endpoint_url = item.endpoint_url
                 existing.updated_at = datetime.now(timezone.utc)
             else:
@@ -1172,7 +1223,7 @@ async def register_integrations(
                     user_id=user_id,
                     type=item.type,
                     name=item.name,
-                    api_key=item.api_key,
+                    api_key=encrypted_key,
                     endpoint_url=item.endpoint_url
                 )
                 db.add(integration)
@@ -1566,6 +1617,17 @@ async def execute_subprocess(body: SubprocessRequest) -> SubprocessResponse:
         error="This endpoint validates commands only. Use zero-cli to execute commands locally.",
         command=body.command,
     )
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for warm-up and monitoring."""
+    return {
+        "status": "ok",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "service": "Zero Orchestrator API",
+        "version": "1.1.0"
+    }
 
 
 if __name__ == "__main__":
