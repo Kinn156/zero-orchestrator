@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../api.js";
+import { invoke } from "@tauri-apps/api/core";
+import { isTauri } from "../utils/tauri.js";
 
 export default function Developer() {
   const navigate = useNavigate();
@@ -18,6 +20,11 @@ export default function Developer() {
   const [newServiceName, setNewServiceName] = useState("");
   const [newServiceKey, setNewServiceKey] = useState("");
   
+  // Local Vault state
+  const [localKeys, setLocalKeys] = useState([]);
+  const [newLocalKeyName, setNewLocalKeyName] = useState("");
+  const [newLocalKeyValue, setNewLocalKeyValue] = useState("");
+  
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (!savedUser) {
@@ -27,6 +34,9 @@ export default function Developer() {
     setUser(JSON.parse(savedUser));
     fetchApiKeys();
     fetchUserIntegrations();
+    if (isTauri()) {
+      fetchLocalKeys();
+    }
   }, [navigate]);
 
   const getAuthHeaders = () => {
@@ -137,6 +147,38 @@ export default function Developer() {
     }
   };
 
+  const fetchLocalKeys = async () => {
+    if (!isTauri()) return;
+    try {
+      const keys = await invoke('list_keys');
+      setLocalKeys(keys);
+    } catch (error) {
+      console.error("Failed to fetch local keys:", error);
+    }
+  };
+
+  const saveLocalKey = async () => {
+    if (!isTauri() || !newLocalKeyName.trim() || !newLocalKeyValue.trim()) return;
+    try {
+      await invoke('save_key', { keyName: newLocalKeyName, keyValue: newLocalKeyValue });
+      setNewLocalKeyName("");
+      setNewLocalKeyValue("");
+      fetchLocalKeys();
+    } catch (error) {
+      console.error("Failed to save local key:", error);
+    }
+  };
+
+  const deleteLocalKey = async (keyName) => {
+    if (!isTauri()) return;
+    try {
+      await invoke('delete_key', { keyName });
+      fetchLocalKeys();
+    } catch (error) {
+      console.error("Failed to delete local key:", error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950">
       {/* Header */}
@@ -190,6 +232,18 @@ export default function Developer() {
           >
             Download Extension
           </button>
+          {isTauri() && (
+            <button
+              onClick={() => setActiveTab("local-vault")}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === "local-vault"
+                  ? "border-b-2 border-orange-400 text-orange-400"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Local Vault
+            </button>
+          )}
         </div>
 
         {/* API Keys Tab */}
@@ -367,6 +421,64 @@ export default function Developer() {
                     Authentication: Use your personal API key via <code className="text-orange-400">X-API-Key</code> header
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Local Vault Tab */}
+        {activeTab === "local-vault" && (
+          <div className="space-y-6">
+            <div className="panel p-6">
+              <h2 className="font-display text-lg font-semibold text-white mb-4">Local Vault</h2>
+              <p className="text-sm text-slate-400 mb-6">
+                Securely store API keys and sensitive data on your local machine using OS-level encryption.
+              </p>
+
+              {/* Add Local Key */}
+              <div className="mb-6 space-y-3">
+                <input
+                  type="text"
+                  value={newLocalKeyName}
+                  onChange={(e) => setNewLocalKeyName(e.target.value)}
+                  placeholder="Key name (e.g., 'Production API Key')"
+                  className="input-field"
+                />
+                <input
+                  type="password"
+                  value={newLocalKeyValue}
+                  onChange={(e) => setNewLocalKeyValue(e.target.value)}
+                  placeholder="Key value"
+                  className="input-field"
+                />
+                <button
+                  onClick={saveLocalKey}
+                  className="btn-primary w-full"
+                >
+                  Save to Local Vault
+                </button>
+              </div>
+
+              {/* Local Keys List */}
+              <div className="space-y-3">
+                {localKeys.length === 0 ? (
+                  <p className="text-sm text-slate-500">No keys stored in local vault yet.</p>
+                ) : (
+                  localKeys.map((keyName) => (
+                    <div key={keyName} className="flex items-center justify-between p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+                      <div>
+                        <p className="text-sm font-medium text-white">{keyName}</p>
+                        <p className="text-xs text-slate-500">Stored securely on local machine</p>
+                      </div>
+                      <button
+                        onClick={() => deleteLocalKey(keyName)}
+                        className="text-sm text-red-400 hover:text-red-300"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

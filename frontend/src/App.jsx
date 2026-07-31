@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Toast from "./components/Toast.jsx";
+import { checkHealth as checkApiHealth, isOnline, addNetworkListener } from "./utils/network.js";
 
 import {
 
@@ -688,6 +689,8 @@ export default function App() {
   const [showDevSettings, setShowDevSettings] = useState(false);
   const [mcpToken, setMcpToken] = useState("");
   const [toast, setToast] = useState(null);
+  const [isOnlineStatus, setIsOnlineStatus] = useState(isOnline());
+  const [backendHealthy, setBackendHealthy] = useState(false);
 
   const navigate = useNavigate();
 
@@ -730,6 +733,39 @@ export default function App() {
     });
 
   }, [customIntegrations]);
+
+  // Network listener and health check
+  useEffect(() => {
+    const updateNetworkStatus = () => {
+      setIsOnlineStatus(isOnline());
+    };
+
+    const checkBackend = async () => {
+      if (isOnline()) {
+        const healthy = await checkApiHealth();
+        setBackendHealthy(healthy);
+      } else {
+        setBackendHealthy(false);
+      }
+    };
+
+    // Initial check
+    checkBackend();
+
+    // Set up network listener
+    const cleanup = addNetworkListener(() => {
+      updateNetworkStatus();
+      checkBackend();
+    });
+
+    // Periodic health check (every 30 seconds)
+    const healthCheckInterval = setInterval(checkBackend, 30000);
+
+    return () => {
+      cleanup();
+      clearInterval(healthCheckInterval);
+    };
+  }, []);
 
 
 
@@ -852,6 +888,16 @@ export default function App() {
   const executeIntent = useCallback(
 
     async (intent) => {
+      // Check network and backend health before execution
+      if (!isOnlineStatus) {
+        pushStream("Active internet connection required to execute orchestration pipeline.", "error");
+        return { success: false };
+      }
+
+      if (!backendHealthy) {
+        pushStream("Backend service is currently unavailable. Please try again later.", "error");
+        return { success: false };
+      }
 
       const vault = customIntegrations;
 
@@ -1302,6 +1348,16 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            {!isOnlineStatus && (
+              <div className="px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                Offline
+              </div>
+            )}
+            {isOnlineStatus && !backendHealthy && (
+              <div className="px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-400">
+                Backend Unavailable
+              </div>
+            )}
             <button
               onClick={() => navigate('/developer')}
               className="btn-primary text-xs"
